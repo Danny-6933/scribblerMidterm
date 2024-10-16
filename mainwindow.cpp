@@ -31,7 +31,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     QAction *saveFileAct = new QAction("Save file");
-    connect(saveFileAct, &QAction::triggered, this, &MainWindow::saveFileSlot);
+    // connect(saveFileAct, &QAction::triggered, this, &MainWindow::saveFileSlot);
     saveFileAct->setShortcut(Qt::CTRL | Qt::Key_S);
 
     QMenu *fileMenu = new QMenu("File");
