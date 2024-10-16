@@ -12,12 +12,13 @@ public:
         Move,
         Release
     };
-
     int action;
     QPointF pos;
     quint64 time;
 
+    MouseEvent() : action(Press), time(0) {};
     MouseEvent(int _action, QPointF _pos, quint64 _time);
+
 
     // friend QTextStream &operator<<(QTextStream &out, const MouseEvent &evt);
     friend QDataStream &operator<<(QDataStream &out, const MouseEvent &evt);
@@ -34,8 +35,8 @@ class Scribbler : public QGraphicsView
     bool isDrawing;
     bool drawingLines;
     QList<MouseEvent> events;
-    QList<QGraphicsLineItem> lines;
-    QList<QGraphicsEllipseItem> dots;
+    QList<QGraphicsLineItem*> lines;
+    QList<QGraphicsEllipseItem*> dots;
 
 
     Q_OBJECT
@@ -43,6 +44,7 @@ public:
     Scribbler();
     void drawLines();
     void drawDots();
+    void updateView();
     void clear();
     void loadFile();
 
@@ -53,7 +55,7 @@ protected:
 public slots:
     void sendEventData();
 signals:
-    void emitEventData(QList<MouseEvent> *emittedEvents);
+    void emitEventData(QList<MouseEvent>& emittedEvents);
 };
 
 #endif // SCRIBBLER_H
