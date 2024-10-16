@@ -30,33 +30,37 @@ void Scribbler::mousePressEvent(QMouseEvent *evt) {
     QGraphicsView::mousePressEvent(evt);
 
     isDrawing = true;
-
     QPointF p = mapToScene(evt->pos());
     lastPoint = p;
 
-    // QGraphicsEllipseItem *curDot = new QGraphicsEllipseItem(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth), QSizeF(lineWidth, lineWidth)));
+    QGraphicsEllipseItem *curDot = new QGraphicsEllipseItem(QRectF(p - QPointF(0.4*lineWidth, 0.4*lineWidth), QSizeF(lineWidth, lineWidth)));
+    curDot->setBrush(Qt::black);
+    scene.addItem(curDot);
 
-    // curDot = new QGraphicsEllipseItem(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth));
-    scene.addEllipse(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth), QSizeF(lineWidth, lineWidth)), Qt::NoPen, Qt::black);
-
-
-    // dots.append(*curDot);
+    dots.append(curDot);
 
     events << MouseEvent(MouseEvent::Press, p, evt->timestamp());
 }
 
-
 void Scribbler::mouseMoveEvent(QMouseEvent *evt) {
     QGraphicsView::mouseMoveEvent(evt);
 
-    if (!isDrawing) return;
     QPointF p = mapToScene(evt->pos());
-    scene.addEllipse(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth), QSizeF(lineWidth, lineWidth)), Qt::NoPen, Qt::black);
-    if (drawingLines) {
-       scene.addLine(QLineF(lastPoint, p), QPen(Qt::black, lineWidth, Qt::SolidLine, Qt::FlatCap));
-    }
-    lastPoint = p;
 
+    QGraphicsEllipseItem *curDot = new QGraphicsEllipseItem(QRectF(p - QPointF(0.4*lineWidth, 0.4*lineWidth), QSizeF(lineWidth, lineWidth)));
+    curDot->setBrush(Qt::black);
+    scene.addItem(curDot);
+    dots.append(curDot);
+
+    QGraphicsLineItem *curLine = new QGraphicsLineItem(QLineF(lastPoint, p));
+    curLine->setPen(QPen(Qt::black, lineWidth, Qt::SolidLine, Qt::FlatCap));
+    if (!drawingLines) {
+        curLine->setVisible(false);
+    }
+    scene.addItem(curLine);
+    lines.append(curLine);
+
+    lastPoint = p;
     events << MouseEvent(MouseEvent::Move, p, evt->timestamp());
 }
 
@@ -67,21 +71,32 @@ void Scribbler::mouseReleaseEvent(QMouseEvent *evt) {
     isDrawing = false;
 
     events << MouseEvent(MouseEvent::Release, p, evt->timestamp());
-
 }
 
 void Scribbler::drawLines() {
     drawingLines = true;
+    updateView();
 }
 
 void Scribbler::drawDots() {
     drawingLines = false;
+    updateView();
+}
 
+void Scribbler::updateView() {
+    for (auto &line : lines) {
+        line->setVisible(drawingLines);
+    }
+    for (auto &dot : dots) {
+        dot->setVisible(true);
+    }
 }
 
 void Scribbler::clear() {
     events.clear();
     scene.clear();
+    lines.clear();
+    dots.clear();
     drawingLines = true;
 }
 
@@ -91,6 +106,5 @@ void Scribbler::loadFile() {
 }
 
 void Scribbler::sendEventData() {
-    emit emitEventData(&events);
+    emit emitEventData(events);
 }
-
