@@ -1,1 +1,1 @@
-I was switching back and forth between working on the lines and the signal/slot. Therefore, neither are fully functional, but both have some aspect of working
+Did a couple more commits to make sure the project was actually runable - i was struggling to get git commit to work so I just did the few files manually
