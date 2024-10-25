@@ -13,8 +13,8 @@ MainWindow::MainWindow(QWidget *parent)
     QHBoxLayout *mainLayout = new QHBoxLayout;
 
     tabWidget = new QTabWidget;
-    mainLayout->addWidget(scribbler);
-    mainLayout->addWidget(tabWidget);
+    mainLayout->addWidget(scribbler, 1);
+    mainLayout->addWidget(tabWidget, 1);
     tabWidget->setHidden(true);
 
     QWidget *centralWidget = new QWidget(this);
@@ -31,7 +31,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 
     QAction *saveFileAct = new QAction("Save file");
-    // connect(saveFileAct, &QAction::triggered, this, &MainWindow::saveFileSlot);
+    connect(saveFileAct, &QAction::triggered, scribbler, &Scribbler::sendAllData);
     saveFileAct->setShortcut(Qt::CTRL | Qt::Key_S);
 
     QMenu *fileMenu = new QMenu("File");
@@ -41,14 +41,15 @@ MainWindow::MainWindow(QWidget *parent)
     menuBar()->addMenu(fileMenu);
 
     QAction *startCaptureAct = new QAction("Begin Capture");
-    connect(startCaptureAct, &QAction::triggered, this, &MainWindow::startCapture);
+    connect(startCaptureAct, &QAction::triggered, scribbler, &Scribbler::startCapture);
     startCaptureAct->setShortcut(Qt::CTRL | Qt::Key_B);
 
     QAction *endCaptureAct = new QAction("End Capture");
     connect(endCaptureAct, &QAction::triggered, scribbler, &Scribbler::sendEventData);
     endCaptureAct->setShortcut(Qt::CTRL | Qt::Key_E);
 
-    connect(scribbler, &Scribbler::emitEventData, this, &MainWindow::saveFileSlot);
+    connect(scribbler, &Scribbler::emitEventData, this, &MainWindow::addTab);
+    connect(scribbler, &Scribbler::emitAllData, this, &MainWindow::saveFileSlot);
 
 
     QMenu *captureMenu = new QMenu("Capture");
@@ -65,6 +66,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(dotView, &QAction::triggered, this, &MainWindow::dotView);
     dotView->setShortcut(Qt::SHIFT | Qt::Key_D);
 
+    connect(tabWidget, &QTabWidget::currentChanged, scribbler, &Scribbler::updateTabOpacity);
+
     QMenu *viewMenu = new QMenu("View");
     viewMenu->addAction(lineView);
     viewMenu->addAction(dotView);
@@ -76,7 +79,7 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 MainWindow::~MainWindow() {
-    QSettings settings("Very Real Company LLC", "Graphics1");
+    QSettings settings("Very Real Company LLC", "Scribbler");
     settings.setValue("lastDir", lastDir);
 }
 
@@ -94,18 +97,26 @@ void MainWindow::openFileSlot() {
     if (fName.isEmpty()) return;
 
     lastDir = QFileInfo(fName).absolutePath();
+
+    QFile inFile(fName);
+    QDataStream in (&inFile);
+    QList<QList<MouseEvent>> eventsList;
+
+    if (!inFile.open(QIODevice::ReadOnly)) {
+        QMessageBox::information(this, "Error", QString("Cannot open file \"%1\"").arg(fName));
+    }
+
+    in >> eventsList;
     // qDebug() << lastDir;
 
+    scribbler->loadFile(eventsList);
 
-    QImage image(fName);
-    if (image.isNull()) return;
-
-
-    scribbler->loadFile();
+    for (auto &eventList : eventsList) {
+        addTab(eventList);
+    }
 }
 
-
-void MainWindow::saveFileSlot(QList<MouseEvent> e) {
+void MainWindow::saveFileSlot(QList<QList<MouseEvent>> e) {
     QString fOutName = QFileDialog::getSaveFileName(this, "Save file to:", QStandardPaths::writableLocation(QStandardPaths::DesktopLocation), tr("Binary file (*.bin)"));
     // *.bin
 
@@ -118,25 +129,75 @@ void MainWindow::saveFileSlot(QList<MouseEvent> e) {
         return;
     }
 
+    qDebug() << "saving file with" << e.size();
+
     QDataStream out(&outFile);
 
     out << e;
 
     outFile.close();
 
-    // message to user
     QMessageBox::information(this, "File Update", "New File saved");
 }
 
-void MainWindow::startCapture() {
+void MainWindow::addTab(QList<MouseEvent> e) {
     tabWidget->setHidden(false);
-}
 
-void MainWindow::endCapture() {
-    // emit sendEventData();
-    tabWidget->setHidden(false);
-}
+    int size = e.size();
 
+    QTableWidget *eventInfoTable = new QTableWidget(size, 4);
+    eventInfoTable->setHorizontalHeaderLabels(QStringList() << "Action type" << "Pos (x,y)" << "Time (MM:SS)" << "Speed (px/ms)");
+    for (int i = 0; i < size; ++i) {
+
+        QString action;
+        if (e[i].action == 0) action = "Press";
+        if (e[i].action == 1) action = "Move";
+        if (e[i].action == 2) action = "Release";
+
+        QTableWidgetItem *eventAction = new QTableWidgetItem();
+        eventAction -> setData(Qt::DisplayRole, action);
+        eventInfoTable->setItem(i,0,eventAction);
+
+
+        QTableWidgetItem *eventPosition = new QTableWidgetItem();
+        eventPosition -> setData(Qt::DisplayRole, QString("(%1, %2 )").arg(e[i].pos.x()).arg(e[i].pos.y()));
+        eventInfoTable->setItem(i,1,eventPosition);
+
+
+        quint64 timeMS = e[i].time;
+        quint64 sec = timeMS/1000;
+        int min = sec/60;
+
+        QString readableTime = (min < 10 ? "0" : "") + QString::number(min) + ":" + (sec%60 < 10 ? "0" : "") + QString::number(sec%60);
+
+        QTableWidgetItem *eventTime = new QTableWidgetItem();
+        eventTime->setData(Qt::DisplayRole, readableTime);
+        eventInfoTable->setItem(i, 2, eventTime);
+
+        QString speed = "N/A";
+        QString mph = "N/A";
+
+        if (action == "Move") {
+            MouseEvent m = e[i];
+            MouseEvent p = e[i-1];
+            // change in dist
+            int Ddist = sqrt((m.pos.x()-p.pos.x()) * (m.pos.x()-p.pos.x()) + (m.pos.y()-p.pos.y())*(m.pos.x()-p.pos.x()));
+            // change in time
+            int Dtime = e[i].time - e[i-1].time;
+            speed = QString::number(Ddist / Dtime);
+            mph = QString::number((Ddist*12672000) / (Dtime*3600000));
+        }
+
+        QTableWidgetItem *eventSpeed = new QTableWidgetItem();
+        eventSpeed->setData(Qt::DisplayRole, speed);
+        eventInfoTable->setItem(i,3,eventSpeed);
+        // eventSpeed->setToolTip(QString("Thats %1 mph!").arg(mph));
+    }
+
+
+    int tabIndex = tabWidget->addTab(eventInfoTable, QString("Capture %1").arg(tabWidget->count() + 1));
+    tabWidget->setCurrentIndex(tabIndex);
+}
 
 void MainWindow::lineView() {
     scribbler->drawLines();
