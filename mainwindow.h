@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QtWidgets>
 #include <QGraphicsScene>
 #include "scribbler.h"
 
@@ -21,10 +22,11 @@ public:
 public slots:
     void resetScribble();
     void openFileSlot();
-    void saveFileSlot(QList<MouseEvent> e);
+    void saveFileSlot(QList<QList<MouseEvent>> e);
+    void addTab(QList<MouseEvent> e);
 
-    void startCapture();
-    void endCapture();
+   //  void startCapture();
+    // void endCapture();
 
 
     void lineView();
